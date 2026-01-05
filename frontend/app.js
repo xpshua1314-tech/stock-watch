@@ -1,0 +1,255 @@
+const API_BASE = 'http://localhost:3000/api';
+
+function $(s){return document.querySelector(s)}
+function $$(s){return document.querySelectorAll(s)}
+
+let watch = JSON.parse(localStorage.getItem('watch')||'[]');
+let historyData = [];
+let sortKey = null;
+let sortAsc = true;
+let historySortKey = null;
+let historySortAsc = true;
+
+function save(){localStorage.setItem('watch', JSON.stringify(watch));}
+
+function render(){
+  const tbody = $('#watchTable tbody');
+  let toRender = [...watch];
+
+  if(sortKey){
+    toRender.sort((a, b)=>{
+      let aVal = a[sortKey] || 0;
+      let bVal = b[sortKey] || 0;
+      if(typeof aVal === 'string') {aVal = aVal.localeCompare(bVal); bVal = 0;}
+      else { aVal = parseFloat(aVal) || 0; bVal = parseFloat(bVal) || 0; }
+      return sortAsc ? aVal - bVal : bVal - aVal;
+    });
+  }
+
+  // 优化：只更新变化的单元格，不重新渲染整行
+  const existingRows = tbody.querySelectorAll('tr');
+  const existingCodes = Array.from(existingRows).map(row => row.dataset.code);
+  
+  toRender.forEach((item, index) => {
+    let tr = existingRows[index];
+    
+    // 如果行不存在或代码不匹配，创建新行
+    if (!tr || tr.dataset.code !== item.code) {
+      tr = document.createElement('tr');
+      tr.dataset.code = item.code;
+      tr.innerHTML = `
+        <td class="code">${item.code}</td>
+        <td class="name">${item.name||''}</td>
+        <td class="price">${item.price||'-'}</td>
+        <td class="chg">${item.change||'-'}</td>
+        <td class="chgPct">${item.chgPct && item.chgPct !== '-' ? item.chgPct + '%' : '-'}</td>
+        <td class="change_7d">${item.change_7d && item.change_7d !== '-' ? item.change_7d + '%' : '-'}</td>
+        <td class="change_15d">${item.change_15d && item.change_15d !== '-' ? item.change_15d + '%' : '-'}</td>
+        <td class="change_30d">${item.change_30d && item.change_30d !== '-' ? item.change_30d + '%' : '-'}</td>
+        <td class="change_60d">${item.change_60d && item.change_60d !== '-' ? item.change_60d + '%' : '-'}</td>
+        <td><button class="remove">移除</button></td>
+      `;
+      
+      tr.querySelector('.remove').addEventListener('click', ()=>{
+        watch = watch.filter(w=>w.code!==item.code);
+        save();
+        render();
+      });
+      
+      if (existingRows[index]) {
+        tbody.insertBefore(tr, existingRows[index]);
+      } else {
+        tbody.appendChild(tr);
+      }
+    } else {
+      // 只更新变化的单元格内容（避免闪烁）
+      const cells = tr.querySelectorAll('td');
+      if (cells[1].textContent !== (item.name || '')) cells[1].textContent = item.name || '';
+      if (cells[2].textContent !== (item.price || '-')) cells[2].textContent = item.price || '-';
+      if (cells[3].textContent !== (item.change || '-')) cells[3].textContent = item.change || '-';
+      const chgPctText = item.chgPct && item.chgPct !== '-' ? item.chgPct + '%' : '-';
+      if (cells[4].textContent !== chgPctText) cells[4].textContent = chgPctText;
+      const c7dText = item.change_7d && item.change_7d !== '-' ? item.change_7d + '%' : '-';
+      if (cells[5].textContent !== c7dText) cells[5].textContent = c7dText;
+      const c15dText = item.change_15d && item.change_15d !== '-' ? item.change_15d + '%' : '-';
+      if (cells[6].textContent !== c15dText) cells[6].textContent = c15dText;
+      const c30dText = item.change_30d && item.change_30d !== '-' ? item.change_30d + '%' : '-';
+      if (cells[7].textContent !== c30dText) cells[7].textContent = c30dText;
+      const c60dText = item.change_60d && item.change_60d !== '-' ? item.change_60d + '%' : '-';
+      if (cells[8].textContent !== c60dText) cells[8].textContent = c60dText;
+    }
+  });
+
+  // 删除多余的行
+  while (tbody.children.length > toRender.length) {
+    tbody.removeChild(tbody.lastChild);
+  }
+}
+
+function renderHistory(){
+  const tbody = $('#historyTable tbody');
+  tbody.innerHTML = '';
+  let toRender = [...historyData];
+  
+  if(historySortKey){
+    toRender.sort((a, b)=>{
+      let aVal = a[historySortKey] || 0;
+      let bVal = b[historySortKey] || 0;
+      if(typeof aVal === 'string') {aVal = aVal.localeCompare(bVal); bVal = 0;}
+      else { aVal = parseFloat(aVal) || 0; bVal = parseFloat(bVal) || 0; }
+      return historySortAsc ? aVal - bVal : bVal - aVal;
+    });
+  }
+  
+  toRender.forEach(item=>{
+    const tr = document.createElement('tr');
+    const changeNum = parseFloat(item.change) || 0;
+    const changePctNum = parseFloat(item.change_pct) || 0;
+    const color = changeNum >= 0 ? '#dc3545' : '#28a745';
+    
+    tr.innerHTML = `
+      <td>${item.code}</td>
+      <td>${item.start_date}</td>
+      <td>${item.start_price}</td>
+      <td>${item.end_date}</td>
+      <td>${item.end_price}</td>
+      <td style="color: ${color}; font-weight: bold;">${changeNum >= 0 ? '+' : ''}${item.change}</td>
+      <td style="color: ${color}; font-weight: bold;">${changePctNum >= 0 ? '+' : ''}${item.change_pct}%</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function handleSort(key){
+  if(sortKey === key) sortAsc = !sortAsc;
+  else { sortKey = key; sortAsc = true; }
+  render();
+}
+
+function handleHistorySort(key){
+  if(historySortKey === key) historySortAsc = !historySortAsc;
+  else { historySortKey = key; historySortAsc = true; }
+  renderHistory();
+}
+
+async function fetchLive(){
+  if(watch.length===0) return;
+  const codes = watch.map(w=>w.code).join(',');
+  try{
+    const r = await fetch(`${API_BASE}/live?code=${codes}&t=${Date.now()}`);
+    const data = await r.json();
+    data.forEach(d=>{
+      const idx = watch.findIndex(w=>w.code===d.code);
+      const prev = idx>=0?watch[idx]:{code:d.code};
+      const change = (d.price - d.prev_close).toFixed(2);
+      const chgPct = d.prev_close?(((d.price-d.prev_close)/d.prev_close)*100).toFixed(2):'0.00';
+      const updated = {code:d.code,name:d.name,price:d.price,change,chgPct};
+      if(idx>=0) watch[idx]=Object.assign(watch[idx], updated);
+      else watch.push(updated);
+    });
+    save();
+    render();
+  }catch(err){
+    console.error('fetchLive',err);
+  }
+}
+
+
+// Fetch historical changes for codes (only called when adding stocks)
+async function fetchHistoricalChanges(codes){
+  if(!codes || codes.length === 0) return;
+  const codesParam = codes.join(',');
+  try{
+    const r = await fetch(`${API_BASE}/historical-changes?code=${codesParam}&t=${Date.now()}`);
+    const data = await r.json();
+    data.forEach(d=>{
+      const idx = watch.findIndex(w=>w.code===d.code);
+      if(idx>=0) {
+        watch[idx].change_7d = d.change_7d;
+        watch[idx].change_15d = d.change_15d;
+        watch[idx].change_30d = d.change_30d;
+        watch[idx].change_60d = d.change_60d;
+      }
+    });
+    save();
+    render();
+  }catch(err){
+    console.error('fetchHistoricalChanges',err);
+  }
+}
+
+$('#addBtn').addEventListener('click', ()=>{
+  const val = $('#codeInput').value.trim();
+  if(!val) return alert('请输入代码');
+  const parts = val.split(',').map(s=>s.trim()).filter(Boolean);
+  
+  $('#codeInput').value = '';
+  save();
+  render();
+  // Fetch historical changes for newly added codes
+  const newCodes = [];
+  parts.forEach(p=>{
+    if(!watch.some(w=>w.code===p)) {
+      watch.push({code:p});
+
+// Refresh historical button - manually refresh all historical data
+$('#refreshHistBtn').addEventListener('click', ()=>{
+  if(watch.length === 0) return alert('请先添加股票代码');
+  const codes = watch.map(w=>w.code);
+  fetchHistoricalChanges(codes);
+});
+      newCodes.push(p);
+    }
+  });
+  if(newCodes.length > 0) {
+    fetchHistoricalChanges(newCodes);
+  }
+});
+
+// 实时行情表 - 列头排序
+$$('#watchTable th[data-key]').forEach(th=>{
+  th.style.cursor = 'pointer';
+  th.addEventListener('click', ()=>handleSort(th.dataset.key));
+});
+
+// 历史数据查询
+$('#rangeBtn').addEventListener('click', async ()=>{
+  const start = $('#startDate').value;
+  const end = $('#endDate').value;
+  if(!start || !end) return alert('请选择日期区间');
+  const codes = watch.map(w=>w.code).join(',');
+  if(!codes) return alert('请先添加股票');
+
+  try{
+    historyData = [];
+    for(const code of codes.split(',')){
+      const r = await fetch(`${API_BASE}/history?code=${code}&start=${start}&end=${end}&t=${Date.now()}`);
+      const data = await r.json();
+      if(!data.error){
+        historyData.push(data);
+      }
+    }
+    
+    if(historyData.length > 0){
+      $('#historyTitle').style.display = 'block';
+      $('#historyTable').style.display = 'table';
+      historySortKey = null;
+      renderHistory();
+    } else {
+      alert('未获取到数据');
+    }
+  }catch(err){
+    alert('查询失败: ' + err.message);
+  }
+});
+
+// 历史数据表 - 列头排序
+$$('#historyTable th[data-key]').forEach(th=>{
+  th.style.cursor = 'pointer';
+  th.addEventListener('click', ()=>handleHistorySort(th.dataset.key));
+});
+
+render();
+
+// 每秒轮询
+setInterval(fetchLive, 1000);

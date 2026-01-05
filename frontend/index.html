@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />   
+  <title>股票自选 - Vibe Coding</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="container">
+    <h1>股票/基金自选</h1>
+    <div class="controls">
+      <input id="codeInput" placeholder="输入股票或基金代码，逗号分隔" />  
+      <button id="addBtn">添加/更新</button>
+      <button id="refreshHistBtn">刷新历史涨跌幅</button>
+
+      <fieldset>
+        <legend>查询历史数据</legend>
+        <label>开始: <input type="date" id="startDate" /></label>
+        <label>结束: <input type="date" id="endDate" /></label>
+        <button id="rangeBtn">查询区间</button>
+      </fieldset>
+    </div>
+
+    <h2>实时行情</h2>
+    <div class="table-wrapper">
+      <table id="watchTable">
+      <thead>
+        <tr>
+          <th data-key="code">代码</th>
+          <th data-key="name">名称</th>
+          <th data-key="price">现价</th>
+          <th data-key="change">涨跌</th>
+          <th data-key="chgPct">涨幅(%)</th>
+          <th data-key="change_7d">7天(%)</th>
+          <th data-key="change_15d">15天(%)</th>
+          <th data-key="change_30d">30天(%)</th>
+          <th data-key="change_60d">60天(%)</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+    </div>
+
+    <h2 id="historyTitle" style="margin-top: 30px; display: none;">区间数据（点击列头排序）</h2>
+    <div class="table-wrapper">
+      <table id="historyTable" style="display: none;">
+      <thead>
+        <tr>
+          <th data-key="code">代码</th>
+          <th data-key="start_date">开始日期</th>
+          <th data-key="start_price">起始价</th>
+          <th data-key="end_date">结束日期</th>
+          <th data-key="end_price">结束价</th>
+          <th data-key="change">涨跌</th>
+          <th data-key="change_pct">涨幅(%)</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+    </div>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
