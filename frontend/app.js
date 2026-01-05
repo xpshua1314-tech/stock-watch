@@ -1,16 +1,17 @@
-const API_BASE = 'http://localhost:3000/api';
+// API配置
+const API_BASE = 'http://localhost:3000';
 
-function $(s){return document.querySelector(s)}
-function $$(s){return document.querySelectorAll(s)}
+const $ = q => document.querySelector(q);
+const $$ = q => document.querySelectorAll(q);
 
-let watch = JSON.parse(localStorage.getItem('watch')||'[]');
+let watch = JSON.parse(localStorage.getItem('watch') || '[]');
 let historyData = [];
-let sortKey = null;
+let sortKey = '';
 let sortAsc = true;
-let historySortKey = null;
+let historySortKey = '';
 let historySortAsc = true;
 
-function save(){localStorage.setItem('watch', JSON.stringify(watch));}
+function save(){ localStorage.setItem('watch', JSON.stringify(watch)); }
 
 function render(){
   const tbody = $('#watchTable tbody');
@@ -28,7 +29,6 @@ function render(){
 
   // 优化：只更新变化的单元格，不重新渲染整行
   const existingRows = tbody.querySelectorAll('tr');
-  const existingCodes = Array.from(existingRows).map(row => row.dataset.code);
   
   toRender.forEach((item, index) => {
     let tr = existingRows[index];
@@ -90,7 +90,7 @@ function renderHistory(){
   const tbody = $('#historyTable tbody');
   tbody.innerHTML = '';
   let toRender = [...historyData];
-  
+
   if(historySortKey){
     toRender.sort((a, b)=>{
       let aVal = a[historySortKey] || 0;
@@ -100,13 +100,13 @@ function renderHistory(){
       return historySortAsc ? aVal - bVal : bVal - aVal;
     });
   }
-  
+
   toRender.forEach(item=>{
     const tr = document.createElement('tr');
     const changeNum = parseFloat(item.change) || 0;
     const changePctNum = parseFloat(item.change_pct) || 0;
     const color = changeNum >= 0 ? '#dc3545' : '#28a745';
-    
+
     tr.innerHTML = `
       <td>${item.code}</td>
       <td>${item.start_date}</td>
@@ -120,32 +120,22 @@ function renderHistory(){
   });
 }
 
-function handleSort(key){
-  if(sortKey === key) sortAsc = !sortAsc;
-  else { sortKey = key; sortAsc = true; }
-  render();
-}
-
-function handleHistorySort(key){
-  if(historySortKey === key) historySortAsc = !historySortAsc;
-  else { historySortKey = key; historySortAsc = true; }
-  renderHistory();
-}
-
 async function fetchLive(){
-  if(watch.length===0) return;
-  const codes = watch.map(w=>w.code).join(',');
+  if(watch.length === 0) return;
   try{
-    const r = await fetch(`${API_BASE}/live?code=${codes}&t=${Date.now()}`);
-    const data = await r.json();
-    data.forEach(d=>{
-      const idx = watch.findIndex(w=>w.code===d.code);
-      const prev = idx>=0?watch[idx]:{code:d.code};
-      const change = (d.price - d.prev_close).toFixed(2);
-      const chgPct = d.prev_close?(((d.price-d.prev_close)/d.prev_close)*100).toFixed(2):'0.00';
-      const updated = {code:d.code,name:d.name,price:d.price,change,chgPct};
-      if(idx>=0) watch[idx]=Object.assign(watch[idx], updated);
-      else watch.push(updated);
+    const codes = watch.map(w=>w.code).join(',');
+    const resp = await fetch(`${API_BASE}/api/live?code=${codes}`);
+    const arr = await resp.json();
+    arr.forEach(item=>{
+      const found = watch.find(w=>w.code===item.code);
+      if(found){
+        found.name = item.name;
+        found.price = item.price.toFixed(2);
+        const chg = item.price - item.prev_close;
+        const chgPct = (chg / item.prev_close * 100).toFixed(2);
+        found.change = chg.toFixed(2);
+        found.chgPct = chgPct;
+      }
     });
     save();
     render();
@@ -154,21 +144,19 @@ async function fetchLive(){
   }
 }
 
-
-// Fetch historical changes for codes (only called when adding stocks)
 async function fetchHistoricalChanges(codes){
   if(!codes || codes.length === 0) return;
-  const codesParam = codes.join(',');
   try{
-    const r = await fetch(`${API_BASE}/historical-changes?code=${codesParam}&t=${Date.now()}`);
-    const data = await r.json();
-    data.forEach(d=>{
-      const idx = watch.findIndex(w=>w.code===d.code);
-      if(idx>=0) {
-        watch[idx].change_7d = d.change_7d;
-        watch[idx].change_15d = d.change_15d;
-        watch[idx].change_30d = d.change_30d;
-        watch[idx].change_60d = d.change_60d;
+    const codesStr = Array.isArray(codes) ? codes.join(',') : codes;
+    const resp = await fetch(`${API_BASE}/api/historical-changes?code=${codesStr}`);
+    const data = await resp.json();
+    data.forEach(item=>{
+      const found = watch.find(w=>w.code===item.code);
+      if(found){
+        found.change_7d = item.change_7d;
+        found.change_15d = item.change_15d;
+        found.change_30d = item.change_30d;
+        found.change_60d = item.change_60d;
       }
     });
     save();
@@ -178,32 +166,35 @@ async function fetchHistoricalChanges(codes){
   }
 }
 
+// 添加按钮
 $('#addBtn').addEventListener('click', ()=>{
   const val = $('#codeInput').value.trim();
   if(!val) return alert('请输入代码');
   const parts = val.split(',').map(s=>s.trim()).filter(Boolean);
-  
-  $('#codeInput').value = '';
-  save();
-  render();
-  // Fetch historical changes for newly added codes
+
   const newCodes = [];
   parts.forEach(p=>{
     if(!watch.some(w=>w.code===p)) {
       watch.push({code:p});
+      newCodes.push(p);
+    }
+  });
+
+  $('#codeInput').value = '';
+  save();
+  render();
+
+  // Fetch historical changes for newly added codes
+  if(newCodes.length > 0) {
+    fetchHistoricalChanges(newCodes);
+  }
+});
 
 // Refresh historical button - manually refresh all historical data
 $('#refreshHistBtn').addEventListener('click', ()=>{
   if(watch.length === 0) return alert('请先添加股票代码');
   const codes = watch.map(w=>w.code);
   fetchHistoricalChanges(codes);
-});
-      newCodes.push(p);
-    }
-  });
-  if(newCodes.length > 0) {
-    fetchHistoricalChanges(newCodes);
-  }
 });
 
 // 实时行情表 - 列头排序
@@ -212,44 +203,57 @@ $$('#watchTable th[data-key]').forEach(th=>{
   th.addEventListener('click', ()=>handleSort(th.dataset.key));
 });
 
-// 历史数据查询
+function handleSort(key){
+  if(sortKey === key) sortAsc = !sortAsc;
+  else { sortKey = key; sortAsc = true; }
+  render();
+}
+
+// 区间查询
 $('#rangeBtn').addEventListener('click', async ()=>{
   const start = $('#startDate').value;
   const end = $('#endDate').value;
-  if(!start || !end) return alert('请选择日期区间');
-  const codes = watch.map(w=>w.code).join(',');
-  if(!codes) return alert('请先添加股票');
+  if(!start || !end) return alert('请选择日期');
+  if(watch.length === 0) return alert('请先添加股票代码');
 
-  try{
-    historyData = [];
-    for(const code of codes.split(',')){
-      const r = await fetch(`${API_BASE}/history?code=${code}&start=${start}&end=${end}&t=${Date.now()}`);
-      const data = await r.json();
-      if(!data.error){
+  historyData = [];
+  const codes = watch.map(w=>w.code);
+  for(let code of codes){
+    try{
+      const resp = await fetch(`${API_BASE}/api/history?code=${code}&start=${start}&end=${end}`);
+      const data = await resp.json();
+      if(data.error){
+        console.warn(`${code}: ${data.error}`);
+      } else {
         historyData.push(data);
       }
+    }catch(err){
+      console.error(`${code} query error:`, err);
     }
-    
-    if(historyData.length > 0){
-      $('#historyTitle').style.display = 'block';
-      $('#historyTable').style.display = 'table';
-      historySortKey = null;
-      renderHistory();
-    } else {
-      alert('未获取到数据');
-    }
-  }catch(err){
-    alert('查询失败: ' + err.message);
   }
+  renderHistory();
+  $('#historyTitle').style.display = 'block';
+  $('#historyTable').style.display = 'table';
 });
 
-// 历史数据表 - 列头排序
+// 历史表 - 列头排序
 $$('#historyTable th[data-key]').forEach(th=>{
   th.style.cursor = 'pointer';
   th.addEventListener('click', ()=>handleHistorySort(th.dataset.key));
 });
 
-render();
+function handleHistorySort(key){
+  if(historySortKey === key) historySortAsc = !historySortAsc;
+  else { historySortKey = key; historySortAsc = true; }
+  renderHistory();
+}
 
-// 每秒轮询
-setInterval(fetchLive, 1000);
+// 初始化
+render();
+if(watch.length > 0){
+  fetchLive();
+  setInterval(fetchLive, 1000);
+  // Fetch historical data for existing codes on load
+  const codes = watch.map(w=>w.code);
+  fetchHistoricalChanges(codes);
+}
