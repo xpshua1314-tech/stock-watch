@@ -1,5 +1,7 @@
-// API配置
-const API_BASE = 'http://localhost:3000';
+// API配置 - 自动检测环境
+const API_BASE = window.location.hostname === 'localhost' 
+  ? 'http://localhost:3000'
+  : 'https://stock-watch-9h14.onrender.com'; // 替换为你的Render后端地址
 
 const $ = q => document.querySelector(q);
 const $$ = q => document.querySelectorAll(q);
