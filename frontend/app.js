@@ -1,4 +1,4 @@
-const API_BASE = 'http://localhost:3000/api';
+const API_BASE = 'https://stock-watch-9h14.onrender.com';
 
 function $(s){return document.querySelector(s)}
 function $$(s){return document.querySelectorAll(s)}
