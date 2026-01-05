@@ -2,6 +2,8 @@ const express = require('express');
 const http = require('http');
 const https = require('https');
 const iconv = require('iconv-lite');
+const fs = require('fs');
+const path = require('path');
 
 function fetchText(url, encoding = 'gbk'){
   return new Promise((resolve, reject)=>{
@@ -34,10 +36,17 @@ function fetchText(url, encoding = 'gbk'){
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// 用户数据存储目录
+const DATA_DIR = path.join(__dirname, '../data');
+if (!fs.existsSync(DATA_DIR)) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+}
+
 app.use(express.json());
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE');
   next();
 });
 
@@ -338,6 +347,48 @@ app.get('/api/history', async (req, res) => {
   }catch(err){
     console.error('[history] error:', err.message);
     res.status(500).json({error:'Failed to fetch historical data: ' + err.message});
+  }
+});
+
+// 获取用户持仓列表
+app.get('/api/watchlist', (req, res) => {
+  try {
+    const userId = req.query.userId || 'default';
+    const filePath = path.join(DATA_DIR, `${userId}.json`);
+    
+    if (fs.existsSync(filePath)) {
+      const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+      res.json({ codes: data.codes || [] });
+    } else {
+      res.json({ codes: [] });
+    }
+  } catch (err) {
+    console.error('[watchlist-get] error:', err);
+    res.status(500).json({ error: 'Failed to load watchlist' });
+  }
+});
+
+// 保存用户持仓列表
+app.post('/api/watchlist', (req, res) => {
+  try {
+    const { userId = 'default', codes } = req.body;
+    
+    if (!Array.isArray(codes)) {
+      return res.status(400).json({ error: 'codes must be an array' });
+    }
+    
+    const filePath = path.join(DATA_DIR, `${userId}.json`);
+    const data = {
+      userId,
+      codes,
+      updatedAt: new Date().toISOString()
+    };
+    
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+    res.json({ success: true, message: 'Watchlist saved' });
+  } catch (err) {
+    console.error('[watchlist-post] error:', err);
+    res.status(500).json({ error: 'Failed to save watchlist' });
   }
 });
 

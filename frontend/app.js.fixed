@@ -1,7 +1,5 @@
-// API配置 - 自动检测环境
-const API_BASE = window.location.hostname === 'localhost' 
-  ? 'http://localhost:3000'
-  : 'https://stock-watch-9h14.onrender.com'; // 替换为你的Render后端地址
+// API配置
+const API_BASE = 'http://localhost:3000';
 
 const $ = q => document.querySelector(q);
 const $$ = q => document.querySelectorAll(q);
@@ -12,72 +10,8 @@ let sortKey = '';
 let sortAsc = true;
 let historySortKey = '';
 let historySortAsc = true;
-let currentUserId = localStorage.getItem('userId') || '';
-
-// 初始化用户ID输入框
-if (currentUserId) {
-  $('#userIdInput').value = currentUserId;
-}
 
 function save(){ localStorage.setItem('watch', JSON.stringify(watch)); }
-
-// 从服务器加载持仓
-async function loadFromServer() {
-  const userId = $('#userIdInput').value.trim();
-  if (!userId) return alert('请输入昵称');
-  
-  try {
-    const resp = await fetch(`${API_BASE}/api/watchlist?userId=${encodeURIComponent(userId)}`);
-    const data = await resp.json();
-    
-    if (data.codes && data.codes.length > 0) {
-      watch = data.codes.map(code => ({ code }));
-      currentUserId = userId;
-      localStorage.setItem('userId', userId);
-      save();
-      render();
-      
-      // 加载实时数据和历史数据
-      fetchLive();
-      fetchHistoricalChanges(watch.map(w => w.code));
-      
-      alert(`成功加载 ${data.codes.length} 只股票`);
-    } else {
-      alert('服务器上没有保存的持仓');
-    }
-  } catch (err) {
-    console.error('loadFromServer', err);
-    alert('加载失败: ' + err.message);
-  }
-}
-
-// 保存到服务器
-async function saveToServer() {
-  const userId = $('#userIdInput').value.trim();
-  if (!userId) return alert('请输入昵称');
-  if (watch.length === 0) return alert('没有可保存的股票');
-  
-  try {
-    const codes = watch.map(w => w.code);
-    const resp = await fetch(`${API_BASE}/api/watchlist`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, codes })
-    });
-    const data = await resp.json();
-    
-    if (data.success) {
-      currentUserId = userId;
-      localStorage.setItem('userId', userId);
-      alert(`成功保存 ${codes.length} 只股票到服务器`);
-    } else {
-      alert('保存失败: ' + (data.error || '未知错误'));
-    }
-  } catch (err) {
-    console.error('saveToServer', err);
-    alert('保存失败: ' + err.message);
-  }
-}
 
 function render(){
   const tbody = $('#watchTable tbody');
@@ -255,12 +189,6 @@ $('#addBtn').addEventListener('click', ()=>{
     fetchHistoricalChanges(newCodes);
   }
 });
-
-// 加载持仓按钮
-$('#loadBtn').addEventListener('click', loadFromServer);
-
-// 保存持仓按钮
-$('#saveBtn').addEventListener('click', saveToServer);
 
 // Refresh historical button - manually refresh all historical data
 $('#refreshHistBtn').addEventListener('click', ()=>{
